@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Document</title>
+    <style>
+        .block {
+      background-color: #f13;
+      position: absolute;
+      width: 400px;
+      height: 200px;
+      top: 20px;
+      left: 20px;
+    }
+    </style>
+</head>
+<body>
+    <div id="Block" class="block"></div>
+    <script>
+        function affineFromGcps(gcps) {
+
+            let sum_x = 0.0, sum_y = 0.0, sum_xy = 0.0, sum_xx = 0.0, sum_yy = 0.0
+            let sum_Lon = 0.0, sum_Lonx = 0.0, sum_Lony = 0.0
+            let sum_Lat = 0.0, sum_Latx = 0.0, sum_Laty = 0.0
+            let divisor = 0.0
+
+            let affine = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+
+            if (gcps.length < 3) {
+                return null
+            }
+
+            gcps.forEach(p => {
+                sum_x += p.source.x
+                sum_y += p.source.y
+                sum_xy += p.source.x * p.source.y
+                sum_xx += p.source.x * p.source.x
+                sum_yy += p.source.y * p.source.y
+                sum_Lon += p.dest.x
+                sum_Lonx += p.dest.x * p.source.x
+                sum_Lony += p.dest.x * p.source.y
+                sum_Lat += p.dest.y
+                sum_Latx += p.dest.y * p.source.x
+                sum_Laty += p.dest.y * p.source.y
+            })
+
+            divisor = gcps.length * (sum_xx * sum_yy - sum_xy * sum_xy)
+                + 2 * sum_x * sum_y * sum_xy - sum_y * sum_y * sum_xx
+                - sum_x * sum_x * sum_yy
+
+            /* -------------------------------------------------------------------- */
+            /*      If the divisor is zero, there is no valid solution.             */
+            /* -------------------------------------------------------------------- */
+            if (divisor === 0) {
+                return null
+            }
+
+            /* -------------------------------------------------------------------- */
+            /*      Compute top/left origin.                                        */
+            /* -------------------------------------------------------------------- */
+
+            affine[0] = (sum_Lon * (sum_xx * sum_yy - sum_xy * sum_xy)
+                + sum_Lonx * (sum_y * sum_xy - sum_x * sum_yy)
+                + sum_Lony * (sum_x * sum_xy - sum_y * sum_xx))
+                / divisor
+
+            affine[3] = (sum_Lat * (sum_xx * sum_yy - sum_xy * sum_xy)
+                + sum_Latx * (sum_y * sum_xy - sum_x * sum_yy)
+                + sum_Laty * (sum_x * sum_xy - sum_y * sum_xx))
+                / divisor
+
+            /* -------------------------------------------------------------------- */
+            /*      Compute X related coefficients.                                 */
+            /* -------------------------------------------------------------------- */
+            affine[1] = (sum_Lon * (sum_y * sum_xy - sum_x * sum_yy)
+                + sum_Lonx * (gcps.length * sum_yy - sum_y * sum_y)
+                + sum_Lony * (sum_x * sum_y - sum_xy * gcps.length))
+                / divisor
+
+            affine[2] = (sum_Lon * (sum_x * sum_xy - sum_y * sum_xx)
+                + sum_Lonx * (sum_x * sum_y - gcps.length * sum_xy)
+                + sum_Lony * (gcps.length * sum_xx - sum_x * sum_x))
+                / divisor
+
+            /* -------------------------------------------------------------------- */
+            /*      Compute Y related coefficients.                                 */
+            /* -------------------------------------------------------------------- */
+            affine[4] = (sum_Lat * (sum_y * sum_xy - sum_x * sum_yy)
+                + sum_Latx * (gcps.length * sum_yy - sum_y * sum_y)
+                + sum_Laty * (sum_x * sum_y - sum_xy * gcps.length))
+                / divisor
+
+            affine[5] = (sum_Lat * (sum_x * sum_xy - sum_y * sum_xx)
+                + sum_Latx * (sum_x * sum_y - gcps.length * sum_xy)
+                + sum_Laty * (gcps.length * sum_xx - sum_x * sum_x))
+                / divisor
+
+
+            affine[0] += 0.5 * affine[1] + 0.5 * affine[2]
+            affine[3] += 0.5 * affine[4] + 0.5 * affine[5]
+
+            return affine
+        }
+
+        let rect = Block.getBoundingClientRect()
+
+        
+
+        
+        // let transform = `matrix(${mtx[1]},${mtx[4]},${mtx[2]},${mtx[5]},${mtx[0]},${mtx[3]})`
+
+        // Block.style.transform = transform
+
+        // const box = document.querySelector('#Block');
+        const boxRect = rect;
+        const boxPoints = [
+            [boxRect.left, boxRect.top],
+            [boxRect.right, boxRect.top],
+            [boxRect.left, boxRect.bottom],
+            [boxRect.right, boxRect.bottom]
+        ]
+
+        const radius = 10;
+        const points = boxPoints.map(point => {
+            const div = document.createElement('div');
+            div.style.position = 'absolute';
+            div.style.width = radius * 2 + 'px';
+            div.style.height = radius * 2 + 'px';
+            div.style.left = (point[0] - radius) + 'px';
+            div.style.top = (point[1] - radius) + 'px';
+            div.style.borderRadius = '50%';
+            div.style.border = '1px solid black';
+            div.style.background = 'yellow';
+            div.setAttribute('draggable', true);
+            div.setAttribute('left', point[0] - radius);
+            div.setAttribute('top', point[1] - radius);
+            document.body.appendChild(div);
+
+            // add drag and drop functionality
+            div.addEventListener('mousedown', e => {
+                const mouseMoveHandler = e => {
+                    div.style.left = (e.clientX - radius) + 'px';
+                    div.style.top = (e.clientY - radius) + 'px';
+                    div.setAttribute('left', e.clientX - radius);
+                    div.setAttribute('top', e.clientY - radius);
+                    update();
+                }
+                const mouseUpHandler = e => {
+                    document.removeEventListener('mousemove', mouseMoveHandler);
+                    document.removeEventListener('mouseup', mouseUpHandler);
+                }
+                document.addEventListener('mousemove', mouseMoveHandler);
+                document.addEventListener('mouseup', mouseUpHandler);
+            })
+            return div;
+        })
+
+        const update = () => {
+            const newPoints = points.map(point => {
+                const left = point.getAttribute('left');
+                const top = point.getAttribute('top');
+                return {
+                    x: parseInt(left),
+                    y: parseInt(top)
+                };
+            })
+            console.log(newPoints[0]);
+            let gcps = [
+                { source: { x: rect.left, y: rect.top }, dest: { ...newPoints[0] } },
+                { source: { x: rect.right, y: rect.top }, dest: { ...newPoints[1] } },
+                { source: { x: rect.left, y: rect.bottom }, dest: { ...newPoints[2] } },
+                { source: { x: rect.right, y: rect.bottom }, dest: { ...newPoints[3] } },
+            ]
+            // let gcps = [
+            //     { source: { x: rect.left, y: rect.top }, dest: { ...newPoints[0] } },
+            //     { source: { x: rect.right, y: rect.top }, dest: { x: 150, y: 50 } },
+            //     { source: { x: rect.left, y: rect.bottom }, dest: { x: 10, y: 100 } },
+            //     { source: { x: rect.right, y: rect.bottom }, dest: { x: 100, y: 100 } }
+            // ]
+            console.log(gcps);
+            let mtx = affineFromGcps(gcps)
+            let transform = `matrix(${mtx[1]},${mtx[4]},${mtx[2]},${mtx[5]},${mtx[0]},${mtx[3]})`
+            // console.log(transform);
+            Block.style.transform = transform
+        }
+    </script>
+</body>
+
+</html>
